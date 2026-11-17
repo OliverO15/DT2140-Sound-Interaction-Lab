@@ -8,6 +8,7 @@
 //
 //==========================================================================================
 let dspNode = null;
+const thunderGain = audioContext.createGain(); // volume of each strike
 let dspNodeParams = null;
 let jsonParams = null;
 
@@ -27,7 +28,8 @@ if (typeof module === "undefined") {
 // The name should be the same as the WASM file, so change tuono with brass if you use brass.wasm
 tuono.createDSP(audioContext, 1024).then((node) => {
   dspNode = node;
-  dspNode.connect(audioContext.destination);
+  dspNode.connect(thunderGain);
+  thunderGain.connect(audioContext.destination);
   console.log("params: ", dspNode.getParams());
   const jsonString = dspNode.getJSON();
   jsonParams = JSON.parse(jsonString)["ui"][0]["items"];
@@ -53,7 +55,21 @@ tuono.createDSP(audioContext, 1024).then((node) => {
 const POINT_UP_MIN_X = 60; // rotation X must be at least this (90 = pointing straight up)
 const ACC_Y_THRESHOLD = 15; // how hard the upward thrust must be (acceleration Y)
 const COOLDOWN_MS = 2000; // wait before thunder can strike again
+// Strength steps: the closer to straight up (90), the louder the thunder.
+// Checked from the top; the first step the rotation X reaches is used.
+const STRENGTH_STEPS = [
+  { minX: 85, volume: 1.0 }, // straight up: full thunder
+  { minX: 75, volume: 0.6 },
+  { minX: 60, volume: 0.3 }, // just pointing up: weak thunder
+];
 let currentRotX = 0;
+
+function strengthFromX(x) {
+  for (const step of STRENGTH_STEPS) {
+    if (x >= step.minX) return step.volume;
+  }
+  return 0;
+}
 let lastStrike = -Infinity;
 
 function accelerationChange(accx, accy, accz) {
@@ -61,6 +77,7 @@ function accelerationChange(accx, accy, accz) {
   const fastUp = accy >= ACC_Y_THRESHOLD;
   if (pointingUp && fastUp && millis() - lastStrike > COOLDOWN_MS) {
     lastStrike = millis();
+    thunderGain.gain.value = strengthFromX(currentRotX);
     playAudio();
   }
 }
@@ -70,6 +87,7 @@ function rotationChange(rotx, roty, rotz) {
 }
 
 function mousePressed() {
+  thunderGain.gain.value = 1;
   playAudio();
   // Use this for debugging from the desktop!
 }

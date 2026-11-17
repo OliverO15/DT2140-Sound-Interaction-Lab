@@ -12,7 +12,7 @@ let dspNodeParams = null;
 let jsonParams = null;
 
 // Change here to ("tuono") depending on your wasm file name
-const dspName = "brass";
+const dspName = "bubble";
 const instance = new FaustWasm2ScriptProcessor(dspName);
 
 // output to window or npm package module
@@ -25,7 +25,7 @@ if (typeof module === "undefined") {
 }
 
 // The name should be the same as the WASM file, so change tuono with brass if you use brass.wasm
-brass.createDSP(audioContext, 1024)
+bubble.createDSP(audioContext, 1024)
     .then(node => {
         dspNode = node;
         dspNode.connect(audioContext.destination);
@@ -51,15 +51,35 @@ brass.createDSP(audioContext, 1024)
 //
 //==========================================================================================
 
+// Spirit level: lay the phone flat. Level -> slow bubbles, tilted -> faster bubbles.
+const LEVEL_TOLERANCE = 3;   // degrees of tilt still counted as level
+const MAX_TILT = 30;         // degrees of tilt for the fastest bubbles
+const SLOW_MS = 1500;        // time between bubbles when level
+const FAST_MS = 100;         // time between bubbles at MAX_TILT or more
+let tilt = 0;                // current tilt away from level, in degrees
+
 function accelerationChange(accx, accy, accz) {
-    // playAudio()
 }
 
 function rotationChange(rotx, roty, rotz) {
+    tilt = Math.sqrt(rotx * rotx + roty * roty);
 }
 
+function bubbleInterval() {
+    if (tilt <= LEVEL_TOLERANCE) return SLOW_MS;
+    const amount = Math.min((tilt - LEVEL_TOLERANCE) / (MAX_TILT - LEVEL_TOLERANCE), 1);
+    return SLOW_MS + (FAST_MS - SLOW_MS) * amount;
+}
+
+// Keep dropping bubbles; the wait until the next one depends on the tilt.
+function bubbleLoop() {
+    playAudio();
+    setTimeout(bubbleLoop, bubbleInterval());
+}
+bubbleLoop();
+
 function mousePressed() {
-    playAudio(mouseX/windowWidth)
+    playAudio()
     // Use this for debugging from the desktop!
 }
 
@@ -74,7 +94,6 @@ function deviceTurned() {
 function deviceShaken() {
     shaketimer = millis();
     statusLabels[0].style("color", "pink");
-    playAudio();
 }
 
 function getMinMaxParam(address) {
@@ -95,15 +114,17 @@ function getMinMaxParam(address) {
 //
 //==========================================================================================
 
-function playAudio(pressure) {
+function playAudio() {
     if (!dspNode) {
         return;
     }
     if (audioContext.state === 'suspended') {
         return;
     }
-    console.log(pressure)
-    dspNode.setParamValue("/brass/blower/pressure", pressure)
+    // Vary the pitch a little so the bubbles sound natural
+    dspNode.setParamValue("/bubble/bubble/freq", 500 + Math.random() * 400)
+    dspNode.setParamValue("/bubble/drop", 1)
+    setTimeout(() => { dspNode.setParamValue("/bubble/drop", 0) }, 20);
 }
 
 //==========================================================================================

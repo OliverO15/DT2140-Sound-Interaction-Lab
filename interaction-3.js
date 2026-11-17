@@ -51,7 +51,9 @@ bubble.createDSP(audioContext, 1024)
 //
 //==========================================================================================
 
-// Spirit level: lay the phone flat. Level -> slow bubbles, tilted -> faster bubbles.
+// Spirit level, like the Measure app: works with the phone standing on its side (long edge),
+// standing upright, or lying flat (either face up or face down).
+// Level -> slow bubbles, tilted -> faster bubbles.
 const LEVEL_TOLERANCE = 3;   // degrees of tilt still counted as level
 const MAX_TILT = 30;         // degrees of tilt for the fastest bubbles
 const SLOW_MS = 1500;        // time between bubbles when level
@@ -62,8 +64,24 @@ function accelerationChange(accx, accy, accz) {
 }
 
 function rotationChange(rotx, roty, rotz) {
-    tilt = Math.sqrt(rotx * rotx + roty * roty);
 }
+
+// Work out the tilt from gravity, which is reliable in every orientation
+// (the rotation angles jump around when the phone stands on its side).
+window.addEventListener("devicemotion", (e) => {
+    const g = e.accelerationIncludingGravity;
+    if (!g || g.x === null) return;
+    const total = Math.sqrt(g.x * g.x + g.y * g.y + g.z * g.z);
+    if (total === 0) return;
+    if (Math.abs(g.z) / total > 0.8) {
+        // Lying flat (face up or face down): tilt = angle between gravity and the screen's normal
+        tilt = Math.acos(Math.min(Math.abs(g.z) / total, 1)) * 180 / Math.PI;
+    } else {
+        // Standing on an edge: angle of gravity in the screen plane, measured from the nearest edge
+        const angle = Math.abs(Math.atan2(g.y, g.x) * 180 / Math.PI) % 90;
+        tilt = Math.min(angle, 90 - angle);
+    }
+});
 
 function bubbleInterval() {
     if (tilt <= LEVEL_TOLERANCE) return SLOW_MS;

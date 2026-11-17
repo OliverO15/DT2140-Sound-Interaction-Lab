@@ -122,9 +122,9 @@ function setup() {
 function draw() {
   //update realtime vals 
 
-  vals[1] = round(accelerationX, 4);
-  vals[2] = round(accelerationY, 4);
-  vals[3] = round(accelerationZ, 4);
+  vals[1] = round(accelerationX);
+  vals[2] = round(accelerationY);
+  vals[3] = round(accelerationZ);
   vals[5] = round(rotationX, 1);
   vals[6] = round(rotationY, 1);
   vals[7] = round(rotationZ, 1);

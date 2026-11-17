@@ -53,30 +53,35 @@ function accelerationChange(accx, accy, accz) {
   //   playAudio();
 }
 
-// Start the engine when rotation Y goes quickly from 44 or below to 70 or above
-const ROT_START = 44; // degrees
-const ROT_END = 70; // degrees
-const MAX_TIME_MS = 400; // how fast the turn must be
-const ENGINE_ON_MS = 3000; // how long the engine runs
-let lastLowTime = -Infinity;
-let enginePlaying = false;
+// Boat throttle: tilt around X like a throttle lever.
+//   X = 90 or more  -> engine stopped
+//   X = 0           -> 80% throttle
+//   X = -45 or less -> 100% throttle (full speed)
+// Values in between are scaled linearly.
+const X_STOP = 90;
+const X_FULL = -45;
+const CRUISE = 0.8;     // throttle at X = 0
+const MAX_SPEED = 0.6;  // engine "maxSpeed" at 100% throttle (0-1)
+const MAX_VOLUME = 0.8; // engine volume at 100% throttle (0-1)
+const SMOOTHING = 0.1;  // 0-1, lower = smoother/slower response
+let throttle = 0;       // smoothed throttle, 0-1
+let engineOn = false;
+
+function throttleFromX(x) {
+  if (x >= X_STOP) return 0;
+  if (x >= 0) return CRUISE * (X_STOP - x) / X_STOP;
+  return CRUISE + (1 - CRUISE) * Math.min(x / X_FULL, 1);
+}
 
 function rotationChange(rotx, roty, rotz) {
-  const now = millis();
-  if (roty <= ROT_START) {
-    lastLowTime = now;
-  } else if (
-    roty >= ROT_END &&
-    now - lastLowTime <= MAX_TIME_MS &&
-    !enginePlaying
-  ) {
-    lastLowTime = -Infinity;
-    playAudio();
+  if (!dspNode || audioContext.state === "suspended") {
+    return;
   }
+  throttle += (throttleFromX(rotx) - throttle) * SMOOTHING;
+  setThrottle(throttle);
 }
 
 function mousePressed() {
-  playAudio();
   // Use this for debugging from the desktop!
 }
 
@@ -112,26 +117,20 @@ function getMinMaxParam(address) {
 //==========================================================================================
 
 function playAudio() {
-  if (!dspNode) {
-    return;
+  // Not used for the boat: the sound is controlled continuously in rotationChange().
+}
+
+function setThrottle(t) {
+  const shouldRun = t > 0.02;
+  if (shouldRun !== engineOn) {
+    engineOn = shouldRun;
+    dspNode.setParamValue("/engine/runtime", 1); // seconds to spin up / down
+    dspNode.setParamValue("/engine/gate", engineOn ? 1 : 0);
   }
-  if (audioContext.state === "suspended") {
-    return;
+  if (engineOn) {
+    dspNode.setParamValue("/engine/maxSpeed", t * MAX_SPEED);
+    dspNode.setParamValue("/engine/volume", t * MAX_VOLUME);
   }
-  // Edit here the addresses ("/thunder/rumble") depending on your WASM controls (you can see
-  // them printed on the console of your browser when you load the page)
-  // For example if you change to a bell sound, here you could use "/churchBell/gate" instead of
-  // "/thunder/rumble".
-  if (enginePlaying) {
-    return;
-  }
-  enginePlaying = true;
-  dspNode.setParamValue("/engine/runtime", 1.5); // seconds to spin up / down
-  dspNode.setParamValue("/engine/gate", 1);
-  setTimeout(() => {
-    dspNode.setParamValue("/engine/gate", 0);
-    enginePlaying = false;
-  }, ENGINE_ON_MS);
 }
 
 //==========================================================================================

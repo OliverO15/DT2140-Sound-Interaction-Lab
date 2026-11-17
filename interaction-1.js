@@ -8,6 +8,7 @@
 //
 //==========================================================================================
 let dspNode = null;
+const panner = audioContext.createStereoPanner();
 let dspNodeParams = null;
 let jsonParams = null;
 
@@ -27,7 +28,9 @@ if (typeof module === "undefined") {
 // The name should be the same as the WASM file, so change tuono with bells if you use bells.wasm
 engine.createDSP(audioContext, 1024).then((node) => {
   dspNode = node;
-  dspNode.connect(audioContext.destination);
+  // Route the sound through a stereo panner so we can move it left/right
+  dspNode.connect(panner);
+  panner.connect(audioContext.destination);
   console.log("params: ", dspNode.getParams());
   const jsonString = dspNode.getJSON();
   jsonParams = JSON.parse(jsonString)["ui"][0]["items"];
@@ -65,6 +68,11 @@ const MAX_SPEED = 0.6;  // engine "maxSpeed" at 100% throttle (0-1)
 const MAX_VOLUME = 0.8; // engine volume at 100% throttle (0-1)
 const SMOOTHING = 0.1;  // 0-1, lower = smoother/slower response
 let throttle = 0;       // smoothed throttle, 0-1
+
+// Steering: tilt around Y pans the engine left/right.
+//   Y = -45 or less -> fully left, Y = 0 -> centre, Y = 45 or more -> fully right
+const Y_FULL = 45;
+let pan = 0;            // smoothed pan, -1 (left) to 1 (right)
 let engineOn = false;
 
 function throttleFromX(x) {
@@ -79,6 +87,10 @@ function rotationChange(rotx, roty, rotz) {
   }
   throttle += (throttleFromX(rotx) - throttle) * SMOOTHING;
   setThrottle(throttle);
+
+  const targetPan = Math.max(-1, Math.min(1, roty / Y_FULL));
+  pan += (targetPan - pan) * SMOOTHING;
+  panner.pan.value = pan;
 }
 
 function mousePressed() {
